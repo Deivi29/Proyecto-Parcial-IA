@@ -1,7 +1,7 @@
 # Proyecto-parcial-IA
 
-## Nombre
+## Nombre Deivi Rodriguez Paulino 
 
-## Matrícula
+## Matrícula 21-SISN-2-052
 
-## Proyecto
+## Proyecto  Retro Tower Defense 
