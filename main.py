@@ -3,12 +3,10 @@
 # Archivo: main.py
 # Descripción: Juego base Tower Defense Retro con menú inicial
 
-from scripts.game_ai import a_star
-from scripts.behavior_tree import Selector, Sequence, Condition, Action
-
-
 import pygame
 import sys
+from scripts.game_ai import a_star
+from scripts.behavior_tree import Selector, Sequence, Condition, Action 
 
 # Inicializar Pygame
 pygame.init()
@@ -18,6 +16,10 @@ ANCHO_VENTANA = 800
 ALTO_VENTANA = 600
 pantalla = pygame.display.set_mode((ANCHO_VENTANA, ALTO_VENTANA))
 pygame.display.set_caption("Tower Defense Retro")
+
+# Cargar sprite del enemigo DESPUÉS de inicializar la pantalla
+enemigo_imagen = pygame.image.load("assets/images/enemigo.png").convert_alpha()
+enemigo_imagen = pygame.transform.scale(enemigo_imagen, (50, 50))
 
 # Colores
 COLOR_FONDO = (30, 30, 30)
@@ -154,15 +156,12 @@ def bucle_juego():
             fila, columna = camino[paso_actual]
             context["enemigo_pos"] = (fila, columna)
 
-            pygame.draw.rect(
-                pantalla,
-                (200, 0, 0),  # color rojo
-                [
-                    (margen + tamano_celda) * columna + margen,
-                    (margen + tamano_celda) * fila + margen,
-                    tamano_celda,
-                    tamano_celda,
-                ]
+            pantalla.blit(
+                 enemigo_imagen,
+                (
+                     (margen + tamano_celda) * columna + margen,
+                    (margen + tamano_celda) * fila + margen
+                )
             )
 
         # Ejecutar el árbol de comportamiento
