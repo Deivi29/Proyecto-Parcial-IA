@@ -10,6 +10,13 @@ from scripts.behavior_tree import Selector, Sequence, Condition, Action
 
 # Inicializar Pygame
 pygame.init()
+pygame.joystick.init()
+pygame.mixer.init()
+
+pygame.mixer.music.load("assets/music/blackground.ogg")
+pygame.mixer.music.set_volume(0.5)  # Volumen de la música
+sonido_disparo = pygame.mixer.Sound("assets/sounds/shoot.wav")
+sonido_disparo.set_volume(0.7)  # Volumen del disparo
 
 # Configuración de la ventana
 ANCHO_VENTANA = 800
@@ -30,7 +37,7 @@ COLOR_SELECCION = (255, 215, 0)
 fuente = pygame.font.Font(None, 48)
 
 # Opciones de menú
-opciones = ["Iniciar Juego", "Salir"]
+opciones = ["Iniciar Juego", "Reiniciar", "Salir"]
 opcion_seleccionada = 0
 
 # Control de FPS
@@ -64,6 +71,8 @@ def disparar(context):
     context["disparo"] = True
 
 def bucle_juego():
+    print("Entrando en el juego...")
+
     """Lógica principal del juego"""
     en_juego = True
 
@@ -115,6 +124,8 @@ def bucle_juego():
     # Tiempo entre pasos (en milisegundos)
     tiempo_entre_pasos = 500
     ultimo_movimiento = pygame.time.get_ticks()
+    pygame.mixer.music.play(-1)  # -1 significa que se repite indefinidamente
+
 
     while en_juego:
         for evento in pygame.event.get():
@@ -169,6 +180,7 @@ def bucle_juego():
 
         # Dibujar el disparo si corresponde
         if context["disparo"]:
+            sonido_disparo.play()
             pygame.draw.rect(
                 pantalla,
                 (255, 255, 0),  # amarillo
@@ -187,25 +199,63 @@ def bucle_juego():
 
 def main():
     global opcion_seleccionada
-    ejecutando = True
+    ejecutando = True 
+
+    opcion_seleccionada = 0
+
+    # Inicializar joystick si existe
+    if pygame.joystick.get_count() > 0:
+        joystick = pygame.joystick.Joystick(0)
+        joystick.init()
+        print("Gamepad detectado:", joystick.get_name())
+    else:
+        joystick = None
+
     while ejecutando:
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+
             if evento.type == pygame.KEYDOWN:
+                print("Tecla presionada:", evento.key)
                 if evento.key == pygame.K_UP:
                     opcion_seleccionada = (opcion_seleccionada - 1) % len(opciones)
+                    print("Opción seleccionada:", opcion_seleccionada)
                 elif evento.key == pygame.K_DOWN:
+                    print("Opción seleccionada:", opcion_seleccionada)
                     opcion_seleccionada = (opcion_seleccionada + 1) % len(opciones)
+
                 elif evento.key == pygame.K_RETURN:
                     if opciones[opcion_seleccionada] == "Iniciar Juego":
+                        bucle_juego()
+                    elif opciones[opcion_seleccionada] == "Reiniciar":
                         bucle_juego()
                     elif opciones[opcion_seleccionada] == "Salir":
                         pygame.quit()
                         sys.exit()
+
+        # Leer joystick si está conectado
+        if joystick:
+            eje_y = joystick.get_axis(1)
+
+            if eje_y < -0.5:
+                opcion_seleccionada = (opcion_seleccionada - 1) % len(opciones)
+            elif eje_y > 0.5:
+                opcion_seleccionada = (opcion_seleccionada + 1) % len(opciones)
+
+            if joystick.get_button(0):
+                if opciones[opcion_seleccionada] == "Iniciar Juego":
+                    bucle_juego()
+                elif opciones[opcion_seleccionada] == "Reiniciar":
+                    bucle_juego()
+                elif opciones[opcion_seleccionada] == "Salir":
+                    pygame.quit()
+                    sys.exit()
+
         dibujar_menu()
         clock.tick(60)
+
 
 if __name__ == "__main__":
     main()
