@@ -7,46 +7,35 @@ import pygame
 import sys
 import random
 from scripts.game_ai import a_star
-from scripts.behavior_tree import Selector, Sequence, Condition, Action
 
-# Inicializar Pygame
 pygame.init()
 pygame.mixer.init()
 
-# Pantalla completa
-info = pygame.display.Info()
-ANCHO_VENTANA = info.current_w
-ALTO_VENTANA = info.current_h
-pantalla = pygame.display.set_mode((ANCHO_VENTANA, ALTO_VENTANA), pygame.FULLSCREEN)
+# Obtener tamaño completo de pantalla
+ANCHO_VENTANA, ALTO_VENTANA = pygame.display.get_desktop_sizes()[0]
+pantalla = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
 pygame.display.set_caption("Tower Defense Retro")
 
-# Música y sonido
-pygame.mixer.music.load("assets/music/blackground.ogg")
-pygame.mixer.music.set_volume(0.3)
-sonido_disparo = pygame.mixer.Sound("assets/sounds/shoot.wav")
-sonido_disparo.set_volume(0.7)
+torre_imagen = pygame.image.load("assets/images/torre.png").convert_alpha()
+torre_imagen = pygame.transform.scale(torre_imagen, (50, 50))
 
-# Sprite enemigo
+disparo_imagen = pygame.image.load("assets/images/disparo.png").convert_alpha()
+disparo_imagen = pygame.transform.scale(disparo_imagen, (15, 15))
+
+explosion_imagen = pygame.image.load("assets/images/explosion.png").convert_alpha()
+explosion_imagen = pygame.transform.scale(explosion_imagen, (50, 50))
+
 enemigo_imagen = pygame.image.load("assets/images/enemigo.png").convert_alpha()
-enemigo_imagen = pygame.transform.scale(enemigo_imagen, (40, 40))
+enemigo_imagen = pygame.transform.scale(enemigo_imagen, (50, 50))
 
-# Colores
-COLOR_FONDO = (10, 10, 10)
-COLOR_GRID = (40, 40, 40)
-COLOR_PATH = (80, 80, 80)
-COLOR_TEXTO = (200, 200, 200)
-COLOR_DISPARO = (255, 255, 0)
+COLOR_FONDO = (20, 20, 20)
+COLOR_TEXTO = (255, 255, 255)
 
-# Fuente
-fuente = pygame.font.Font(None, 42)
-fuente_grande = pygame.font.Font(None, 80)
+fuente = pygame.font.Font(None, 36)
+clock = pygame.time.Clock()
 
-# Opciones de menú
 opciones = ["Iniciar Juego", "Salir"]
 opcion_seleccionada = 0
-
-# FPS
-clock = pygame.time.Clock()
 
 def dibujar_menu():
     pantalla.fill(COLOR_FONDO)
@@ -59,45 +48,35 @@ def dibujar_menu():
 
 def bucle_juego():
     en_juego = True
+    filas, columnas = 10, 10
+    tamano_celda = 60
+    margen = 2
 
-    # Grilla
-    filas = 10
-    columnas = 16
-    tamano_celda = 70
-    margen = 1
+    # Calcular tamaño total grilla y offset para centrar
+    ancho_grilla = columnas * (tamano_celda + margen)
+    alto_grilla = filas * (tamano_celda + margen)
+    offset_x = (ANCHO_VENTANA - ancho_grilla) // 2
+    offset_y = (ALTO_VENTANA - alto_grilla) // 2
 
-    # Crear grilla con camino central por defecto
-    grilla = []
-    for fila in range(filas):
-        grilla.append([])
-        for columna in range(columnas):
-            grilla[fila].append(0)
+    grilla = [[0]*columnas for _ in range(filas)]
 
-    # Torre
-    torre_col = columnas // 2
-    torre_fila = filas - 1
+    torre_pos_x = ANCHO_VENTANA // 2 - 25
+    torre_pos_y = offset_y + alto_grilla + 20
 
-    # Enemigos
     enemigos = []
-    spawn_delay = 2000
-    ultimo_spawn = pygame.time.get_ticks()
-    velocidad_base = 0.03
+    spawn_timer = pygame.time.get_ticks()
+    spawn_delay = 800
 
-    # Vidas y puntaje
-    vidas = 3
-    puntaje = 0
-    record = 0
-    enemigos_muertos = 0
-    nivel = 1
-
-    # Disparos
     disparos = []
+    explosiones = []
 
-    # Música
+    enemigos_que_pasaron = 0
+    puntos = 0
+    velocidad_enemigos = 2
+
+    pygame.mixer.music.load("assets/music/blackground.ogg")
     pygame.mixer.music.play(-1)
-
-    juego_terminado = False
-    resultado_texto = ""
+    sonido_disparo = pygame.mixer.Sound("assets/sounds/shoot.wav")
 
     while en_juego:
         for evento in pygame.event.get():
@@ -107,134 +86,141 @@ def bucle_juego():
             if evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     en_juego = False
-                if evento.key == pygame.K_LEFT and torre_col > 0:
-                    torre_col -= 1
-                if evento.key == pygame.K_RIGHT and torre_col < columnas - 1:
-                    torre_col += 1
-                if evento.key == pygame.K_SPACE and not juego_terminado:
+                if evento.key == pygame.K_SPACE:
                     sonido_disparo.play()
-                    disparos.append({
-                        "pos": [
-                            (margen + tamano_celda) * torre_col + tamano_celda // 2 - 5,
-                            (margen + tamano_celda) * torre_fila
-                        ]
+                    disparos.append(pygame.Rect(
+                        torre_pos_x + 20,
+                        torre_pos_y,
+                        15,
+                        15
+                    ))
+
+        teclas = pygame.key.get_pressed()
+        if teclas[pygame.K_LEFT] and torre_pos_x > 0:
+            torre_pos_x -= 5
+        if teclas[pygame.K_RIGHT] and torre_pos_x < ANCHO_VENTANA - 50:
+            torre_pos_x += 5
+
+        if pygame.time.get_ticks() - spawn_timer > spawn_delay:
+            cantidad_spawn = random.randint(1, 2)
+            for _ in range(cantidad_spawn):
+                fila = 0
+                columna = random.randint(0, columnas-1)
+                columna_destino = random.randint(0, columnas-1)
+                camino = a_star((fila, columna), (filas - 1, columna_destino), grilla)
+
+                if camino:
+                    enemigos.append({
+                        "camino": camino,
+                        "index": 0,
+                        "progress": 0.0,
+                        "vida": 3
                     })
+            spawn_timer = pygame.time.get_ticks()
 
         pantalla.fill(COLOR_FONDO)
 
-        # Spawn enemigos
-        now = pygame.time.get_ticks()
-        if not juego_terminado and now - ultimo_spawn > spawn_delay:
-            spawn_col = random.randint(0, columnas - 1)
-            goal_col = random.randint(0, columnas - 1)
-            start = (0, spawn_col)
-            goal = (filas - 1, goal_col)
-            camino = a_star(start, goal, grilla)
-
-            if camino:
-                enemigos.append({
-                    "camino": camino,
-                    "paso": 0,
-                    "vivo": True,
-                    "hp": 3,
-                    "velocidad": velocidad_base
-                })
-            ultimo_spawn = now
-
-        # Dibujar grilla
+        # Dibujar grilla centrada
         for fila in range(filas):
             for columna in range(columnas):
                 pygame.draw.rect(
                     pantalla,
-                    COLOR_GRID,
+                    (30,30,30),
                     [
-                        (margen + tamano_celda) * columna,
-                        (margen + tamano_celda) * fila,
+                        offset_x + (margen + tamano_celda)*columna,
+                        offset_y + (margen + tamano_celda)*fila,
                         tamano_celda,
                         tamano_celda
                     ]
                 )
 
-        enemigos_vivos = 0
-
+        nuevos_enemigos = []
         for enemigo in enemigos:
-            if not enemigo["vivo"]:
+            camino = enemigo["camino"]
+            idx = enemigo["index"]
+
+            if idx < len(camino) - 1:
+                actual = camino[idx]
+                siguiente = camino[idx + 1]
+
+                ax = offset_x + (margen + tamano_celda)*actual[1]
+                ay = offset_y + (margen + tamano_celda)*actual[0]
+                bx = offset_x + (margen + tamano_celda)*siguiente[1]
+                by = offset_y + (margen + tamano_celda)*siguiente[0]
+
+                enemigo["progress"] += velocidad_enemigos / 50.0
+                if enemigo["progress"] >= 1.0:
+                    enemigo["progress"] = 0.0
+                    enemigo["index"] += 1
+
+            if enemigo["index"] >= len(camino)-1:
+                enemigos_que_pasaron += 1
                 continue
-            enemigo["paso"] += enemigo["velocidad"] if not juego_terminado else 0
+            else:
+                actual = camino[enemigo["index"]]
+                siguiente = camino[enemigo["index"] + 1]
+                ax = offset_x + (margen + tamano_celda)*actual[1]
+                ay = offset_y + (margen + tamano_celda)*actual[0]
+                bx = offset_x + (margen + tamano_celda)*siguiente[1]
+                by = offset_y + (margen + tamano_celda)*siguiente[0]
+                x = ax + (bx - ax)*enemigo["progress"]
+                y = ay + (by - ay)*enemigo["progress"]
 
-            if enemigo["paso"] >= len(enemigo["camino"]):
-                vidas -= 1
-                enemigo["vivo"] = False
-                if vidas <= 0:
-                    juego_terminado = True
-                    resultado_texto = "¡PERDISTE!"
-                continue
+                enemigo["pos_rect"] = pygame.Rect(x, y, 50, 50)
+                pantalla.blit(enemigo_imagen, (x, y))
+                nuevos_enemigos.append(enemigo)
 
-            if enemigo["paso"] >= 0:
-                fila, columna = enemigo["camino"][int(enemigo["paso"])]
-                enemigo_rect = pygame.Rect(
-                    (margen + tamano_celda) * columna,
-                    (margen + tamano_celda) * fila,
-                    tamano_celda,
-                    tamano_celda
-                )
-                pantalla.blit(enemigo_imagen, enemigo_rect.topleft)
-                enemigo["rect"] = enemigo_rect
-                enemigos_vivos += 1
+        enemigos = nuevos_enemigos
 
-        # Mover disparos
         nuevos_disparos = []
         for disparo in disparos:
-            disparo["pos"][1] -= 15
-            disparo_rect = pygame.Rect(disparo["pos"][0], disparo["pos"][1], 10, 10)
-            pygame.draw.rect(pantalla, COLOR_DISPARO, disparo_rect)
-
+            disparo.y -=10
+            pantalla.blit(disparo_imagen, (disparo.x, disparo.y))
             impactado = False
             for enemigo in enemigos:
-                if enemigo.get("rect") and enemigo["vivo"] and disparo_rect.colliderect(enemigo["rect"]):
-                    enemigo["hp"] -= 1
+                if enemigo.get("pos_rect") and disparo.colliderect(enemigo["pos_rect"]):
+                    enemigo["vida"] -=1
+                    if enemigo["vida"] <=0:
+                        puntos +=1
+                        explosiones.append({"pos": enemigo["pos_rect"].topleft, "timer":20})
+                        enemigos.remove(enemigo)
+                        if puntos % 5 == 0:
+                            velocidad_enemigos += 0.3
                     impactado = True
-                    if enemigo["hp"] <= 0:
-                        enemigo["vivo"] = False
-                        puntaje += 100
-                        enemigos_muertos += 1
-                        if enemigos_muertos > record:
-                            record = enemigos_muertos
-                        if enemigos_muertos % 10 == 0:
-                            velocidad_base += 0.01
                     break
-            if not impactado and disparo["pos"][1] > 0:
+            if not impactado and disparo.y > 0:
                 nuevos_disparos.append(disparo)
         disparos = nuevos_disparos
 
-        # Dibujar torre
-        torre_rect = pygame.Rect(
-            (margen + tamano_celda) * torre_col,
-            (margen + tamano_celda) * torre_fila,
-            tamano_celda,
-            tamano_celda
-        )
-        pygame.draw.rect(pantalla, (0, 255, 0), torre_rect)
+        nuevas_explosiones = []
+        for ex in explosiones:
+            pantalla.blit(explosion_imagen, ex["pos"])
+            ex["timer"] -=1
+            if ex["timer"] >0:
+                nuevas_explosiones.append(ex)
+        explosiones = nuevas_explosiones
 
-        # Panel lateral
-        panel_x = (margen + tamano_celda) * columnas + 40
-        y = 40
-        info = [
-            f"Vidas: {vidas}",
-            f"Puntaje: {puntaje}",
-            f"Record: {record}",
-            f"Enemigos vivos: {enemigos_vivos}",
-            f"Nivel velocidad: {round(velocidad_base, 2)}"
-        ]
-        for line in info:
-            txt = fuente.render(line, True, COLOR_TEXTO)
-            pantalla.blit(txt, (panel_x, y))
-            y += 50
+        pantalla.blit(torre_imagen, (torre_pos_x, torre_pos_y))
 
-        if juego_terminado:
-            txt = fuente_grande.render(resultado_texto, True, (255, 0, 0))
-            rect = txt.get_rect(center=(ANCHO_VENTANA // 2, ALTO_VENTANA // 2))
-            pantalla.blit(txt, rect)
+        text = fuente.render(f"Puntos: {puntos}  Enemigos que pasaron: {enemigos_que_pasaron}/3", True, COLOR_TEXTO)
+        pantalla.blit(text, (10,10))
+
+        if enemigos_que_pasaron >=3:
+            game_over = True
+            while game_over:
+                pantalla.fill(COLOR_FONDO)
+                text = fuente.render("GAME OVER", True, (255,0,0))
+                pantalla.blit(text,(ANCHO_VENTANA//2 -100,ALTO_VENTANA//2))
+                text2 = fuente.render("Presiona ESC para volver al menú", True, (255,255,255))
+                pantalla.blit(text2,(ANCHO_VENTANA//2 -200,ALTO_VENTANA//2 +50))
+                pygame.display.flip()
+                for evento in pygame.event.get():
+                    if evento.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    if evento.type == pygame.KEYDOWN:
+                        if evento.key == pygame.K_ESCAPE:
+                            return
 
         pygame.display.flip()
         clock.tick(60)
@@ -249,20 +235,18 @@ def main():
                 sys.exit()
             if evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_UP:
-                    opcion_seleccionada = (opcion_seleccionada - 1) % len(opciones)
+                    opcion_seleccionada = (opcion_seleccionada -1)%len(opciones)
                 elif evento.key == pygame.K_DOWN:
-                    opcion_seleccionada = (opcion_seleccionada + 1) % len(opciones)
+                    opcion_seleccionada = (opcion_seleccionada +1)%len(opciones)
                 elif evento.key == pygame.K_RETURN:
-                    if opciones[opcion_seleccionada] == "Iniciar Juego":
+                    if opciones[opcion_seleccionada]=="Iniciar Juego":
                         bucle_juego()
-                    elif opciones[opcion_seleccionada] == "Salir":
+                    elif opciones[opcion_seleccionada]=="Salir":
                         pygame.quit()
                         sys.exit()
         dibujar_menu()
         clock.tick(60)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
-
-
 

@@ -1,0 +1,13 @@
+# Ignorar carpetas de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignorar entorno virtual (si tuvieras)
+.env
+
+# Ignorar sonidos y recursos pesados
+*.ogg
+
+# Ignorar la carpeta de assets completa
+assets/
