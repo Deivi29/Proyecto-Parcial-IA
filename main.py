@@ -249,6 +249,10 @@ def bucle_juego():
                     if evento.type == pygame.KEYDOWN:
                         if evento.key == pygame.K_ESCAPE:
                             return
+                        # Salir con botón X del gamepad
+                if joystick:
+                    if joystick.get_button(2):
+                        return
 
         pygame.display.flip()
         clock.tick(60)
