@@ -37,6 +37,14 @@ clock = pygame.time.Clock()
 opciones = ["Iniciar Juego", "Salir"]
 opcion_seleccionada = 0
 
+# Inicializar joystick si hay
+pygame.joystick.init()
+joystick = None
+if pygame.joystick.get_count() > 0:
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print("Gamepad detectado:", joystick.get_name())
+
 def dibujar_menu():
     pantalla.fill(COLOR_FONDO)
     for i, texto in enumerate(opciones):
@@ -52,14 +60,12 @@ def bucle_juego():
     tamano_celda = 60
     margen = 2
 
-    # Calcular tamaño total grilla y offset para centrar
     ancho_grilla = columnas * (tamano_celda + margen)
     alto_grilla = filas * (tamano_celda + margen)
     offset_x = (ANCHO_VENTANA - ancho_grilla) // 2
     offset_y = (ALTO_VENTANA - alto_grilla) // 2
 
     grilla = [[0]*columnas for _ in range(filas)]
-
     torre_pos_x = ANCHO_VENTANA // 2 - 25
     torre_pos_y = offset_y + alto_grilla + 20
 
@@ -78,6 +84,10 @@ def bucle_juego():
     pygame.mixer.music.play(-1)
     sonido_disparo = pygame.mixer.Sound("assets/sounds/shoot.wav")
 
+    boton_disparo_presionado = False
+
+    
+
     while en_juego:
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -95,11 +105,32 @@ def bucle_juego():
                         15
                     ))
 
+        # Movimiento con teclado
         teclas = pygame.key.get_pressed()
         if teclas[pygame.K_LEFT] and torre_pos_x > 0:
             torre_pos_x -= 5
         if teclas[pygame.K_RIGHT] and torre_pos_x < ANCHO_VENTANA - 50:
             torre_pos_x += 5
+
+        # Movimiento con joystick
+        if joystick:
+            axis_x = joystick.get_axis(0)
+            if abs(axis_x) > 0.2:
+                torre_pos_x += axis_x * 7
+                torre_pos_x = max(0, min(torre_pos_x, ANCHO_VENTANA - 50))
+            # Disparo con botón A (un disparo por pulsación)
+            if joystick.get_button(0):
+                if not boton_disparo_presionado:
+                    sonido_disparo.play()
+                    disparos.append(pygame.Rect(
+                        torre_pos_x + 20,
+                        torre_pos_y,
+                        15,
+                        15
+                    ))
+                boton_disparo_presionado = True
+            else:
+                boton_disparo_presionado = False
 
         if pygame.time.get_ticks() - spawn_timer > spawn_delay:
             cantidad_spawn = random.randint(1, 2)
@@ -108,7 +139,6 @@ def bucle_juego():
                 columna = random.randint(0, columnas-1)
                 columna_destino = random.randint(0, columnas-1)
                 camino = a_star((fila, columna), (filas - 1, columna_destino), grilla)
-
                 if camino:
                     enemigos.append({
                         "camino": camino,
@@ -120,7 +150,6 @@ def bucle_juego():
 
         pantalla.fill(COLOR_FONDO)
 
-        # Dibujar grilla centrada
         for fila in range(filas):
             for columna in range(columnas):
                 pygame.draw.rect(
@@ -201,7 +230,6 @@ def bucle_juego():
         explosiones = nuevas_explosiones
 
         pantalla.blit(torre_imagen, (torre_pos_x, torre_pos_y))
-
         text = fuente.render(f"Puntos: {puntos}  Enemigos que pasaron: {enemigos_que_pasaron}/3", True, COLOR_TEXTO)
         pantalla.blit(text, (10,10))
 
@@ -228,6 +256,9 @@ def bucle_juego():
 def main():
     global opcion_seleccionada
     ejecutando = True
+
+    joystick_timer = 0  # Para evitar scroll rápido al mantener el eje
+
     while ejecutando:
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -244,9 +275,30 @@ def main():
                     elif opciones[opcion_seleccionada]=="Salir":
                         pygame.quit()
                         sys.exit()
+
+        # Si hay joystick
+        if joystick:
+            axis_y = joystick.get_axis(1)
+            if abs(axis_y) > 0.4 and pygame.time.get_ticks() - joystick_timer > 250:
+                if axis_y < 0:
+                    opcion_seleccionada = (opcion_seleccionada -1)%len(opciones)
+                elif axis_y > 0:
+                    opcion_seleccionada = (opcion_seleccionada +1)%len(opciones)
+                joystick_timer = pygame.time.get_ticks()
+
+            # Botón 0 como "Enter"
+            if joystick.get_button(0):
+                if opciones[opcion_seleccionada]=="Iniciar Juego":
+                    bucle_juego()
+                elif opciones[opcion_seleccionada]=="Salir":
+                    pygame.quit()
+                    sys.exit()
+
         dibujar_menu()
         clock.tick(60)
 
 if __name__=="__main__":
     main()
+
+
 
